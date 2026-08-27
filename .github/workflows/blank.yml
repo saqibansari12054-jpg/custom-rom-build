@@ -1,0 +1,22 @@
+name: Build Custom ROM
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Setup Environment
+      run: |
+        sudo apt update
+        sudo apt install -y openjdk-11-jdk git-core repo bc bison build-essential zip curl
+
+    - name: Test Cloud Build
+      run: |
+        echo "Cloud Server is Ready for ROM Compilation"
+        
