@@ -11,11 +11,10 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Maximize Swap & Disk Space
+    - name: Maximize Disk Space
       run: |
         sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
         sudo apt-get clean
-        echo "Disk space freed"
 
     - name: Setup Build Environment
       run: |
@@ -33,7 +32,19 @@ jobs:
     - name: Clone Device Trees (Samsung A10)
       run: |
         cd ~/rom
-     git clone https://github.com/eun-01/android_device_samsung_a10.git -b lineage-20.0 device/samsung/a10
-git clone https://github.com/eun-01/android_device_samsung_exynos7884-common.git -b lineage-20.0 device/samsung/exynos7884-common
-git clone https://github.com/eun-01/android_kernel_samsung_exynos7884.git -b lineage-20.0 kernel/samsung/exynos7884
-git clone https://github.com/eun-01/android_vendor_samsung_a10.git -b lineage-20.0 vendor/samsung/a10
+        git clone https://github.com/eun-01/android_device_samsung_a10.git -b lineage-20.0 device/samsung/a10
+        git clone https://github.com/eun-01/android_device_samsung_exynos7884-common.git -b lineage-20.0 device/samsung/exynos7884-common
+        git clone https://github.com/eun-01/android_kernel_samsung_exynos7884.git -b lineage-20.0 kernel/samsung/exynos7884
+        git clone https://github.com/eun-01/android_vendor_samsung_a10.git -b lineage-20.0 vendor/samsung/a10
+
+    - name: Sync Sources
+      run: |
+        cd ~/rom
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+
+    - name: Build ROM
+      run: |
+        cd ~/rom
+        source build/envsetup.sh
+        lunch lineage_a10-userdebug
+        mka bacon -j$(nproc --all)
