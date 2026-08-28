@@ -33,21 +33,7 @@ jobs:
     - name: Clone Device Trees (Samsung A10)
       run: |
         cd ~/rom
-        git clone https://github.com/LineageOS/android_device_samsung_a10.git -b lineage-20.0 device/samsung/a10
-        git clone https://github.com/LineageOS/android_device_samsung_exynos7884-common.git -b lineage-20.0 device/samsung/exynos7884-common
-        git clone https://github.com/LineageOS/android_kernel_samsung_exynos7884.git -b lineage-20.0 kernel/samsung/exynos7884
-        git clone https://github.com/TheVendorProject/vendor_samsung_a10.git -b lineage-20.0 vendor/samsung/a10
-
-    - name: Sync Sources
-      run: |
-        cd ~/rom
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
-
-    - name: Build ROM
-      run: |
-        cd ~/rom
-        source build/envsetup.sh
-        lunch lineage_a10-userdebug
-        mka bacon -j$(nproc --all)
-        
-        
+     git clone https://github.com/eun-01/android_device_samsung_a10.git -b lineage-20.0 device/samsung/a10
+git clone https://github.com/eun-01/android_device_samsung_exynos7884-common.git -b lineage-20.0 device/samsung/exynos7884-common
+git clone https://github.com/eun-01/android_kernel_samsung_exynos7884.git -b lineage-20.0 kernel/samsung/exynos7884
+git clone https://github.com/eun-01/android_vendor_samsung_a10.git -b lineage-20.0 vendor/samsung/a10
