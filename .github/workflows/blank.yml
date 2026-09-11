@@ -32,10 +32,10 @@ jobs:
     - name: Clone Device Trees (Samsung A10)
       run: |
         cd ~/rom
-        git clone https://github.com/eun-01/android_device_samsung_a10.git -b lineage-20.0 device/samsung/a10 --depth=1
-        git clone https://github.com/eun-01/android_device_samsung_exynos7884-common.git -b lineage-20.0 device/samsung/exynos7884-common --depth=1 || true
-        git clone https://github.com/eun-01/android_kernel_samsung_exynos7884.git -b lineage-20.0 kernel/samsung/exynos7884 --depth=1 || true
-        git clone https://github.com/eun-01/android_vendor_samsung_a10.git -b lineage-20.0 vendor/samsung/a10 --depth=1 || true
+        git clone https://github.com/LineageOS/android_device_samsung_a10.git -b lineage-20.0 device/samsung/a10 --depth=1 || true
+        git clone https://github.com/LineageOS/android_device_samsung_exynos7884-common.git -b lineage-20.0 device/samsung/exynos7884-common --depth=1 || true
+        git clone https://github.com/LineageOS/android_kernel_samsung_exynos7884.git -b lineage-20.0 kernel/samsung/exynos7884 --depth=1 || true
+        git clone https://github.com/LineageOS/android_vendor_samsung_a10.git -b lineage-20.0 vendor/samsung/a10 --depth=1 || true
 
     - name: Sync Sources
       run: |
