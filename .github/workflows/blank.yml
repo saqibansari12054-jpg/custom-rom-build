@@ -29,13 +29,11 @@ jobs:
         git config --global user.email "saqibansari12054@gmail.com"
         repo init -u https://github.com/LineageOS/android.git -b lineage-20.0 --git-lfs --depth=1
 
-    - name: Clone Device Trees (Samsung A10)
+    - name: Setup Local Manifest for Samsung A10
       run: |
         cd ~/rom
-        git clone https://github.com/LineageOS/android_device_samsung_a10.git -b lineage-20.0 device/samsung/a10 --depth=1 || true
-        git clone https://github.com/LineageOS/android_device_samsung_exynos7884-common.git -b lineage-20.0 device/samsung/exynos7884-common --depth=1 || true
-        git clone https://github.com/LineageOS/android_kernel_samsung_exynos7884.git -b lineage-20.0 kernel/samsung/exynos7884 --depth=1 || true
-        git clone https://github.com/LineageOS/android_vendor_samsung_a10.git -b lineage-20.0 vendor/samsung/a10 --depth=1 || true
+        mkdir -p .repo/local_manifests
+        git clone https://github.com/a10ser/local_manifests.git -b lineage-20.0 .repo/local_manifests || true
 
     - name: Sync Sources
       run: |
@@ -46,5 +44,5 @@ jobs:
       run: |
         cd ~/rom
         source build/envsetup.sh
-        lunch lineage_a10-userdebug
+        lunch lineage_a10-userdebug || lunch lineage_a10-ap1a-userdebug
         mka bacon -j$(nproc --all)
