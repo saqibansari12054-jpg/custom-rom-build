@@ -1,48 +1,170 @@
-name: Build Custom ROM
+name: Build Custom ROM - Samsung A10
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    env:
+      ROM_DIR: ${{ github.workspace }}/rom
+      DEVICE: a10
+      BUILD_TARGET: lineage_a10-userdebug
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: Checkout workflow repository
+        uses: actions/checkout@v4
 
-    - name: Maximize Disk Space
-      run: |
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
-        sudo apt-get clean
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo apt-get clean
+          df -h
 
-    - name: Setup Build Environment
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf libxml2-utils lzop pngcrush schedtool squashfs-tools xsltproc zip zlib1g-dev repo
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            adb \
+            aria2 \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            curl \
+            flex \
+            g++-multilib \
+            gcc-multilib \
+            git \
+            gnupg \
+            gperf \
+            imagemagick \
+            lib32ncurses6 \
+            lib32readline-dev \
+            lib32z1-dev \
+            libelf-dev \
+            liblz4-tool \
+            libncurses6 \
+            libncurses-dev \
+            libsdl1.2-dev \
+            libssl-dev \
+            libxml2-utils \
+            lzop \
+            pngcrush \
+            rsync \
+            schedtool \
+            squashfs-tools \
+            unzip \
+            xsltproc \
+            zip \
+            zlib1g-dev
 
-    - name: Initialize LineageOS Source
-      run: |
-        mkdir -p ~/rom
-        cd ~/rom
-        git config --global user.name "saqibansari12054-jpg"
-        git config --global user.email "saqibansari12054@gmail.com"
-        repo init -u https://github.com/LineageOS/android.git -b lineage-20.0 --git-lfs --depth=1
+      - name: Install repo
+        run: |
+          mkdir -p "$HOME/bin"
+          curl https://storage.googleapis.com/git-repo-downloads/repo \
+            -o "$HOME/bin/repo"
+          chmod +x "$HOME/bin/repo"
+          echo "$HOME/bin" >> "$GITHUB_PATH"
 
-    - name: Setup Local Manifest for Samsung A10
-      run: |
-        cd ~/rom
-        mkdir -p .repo/local_manifests
-        git clone https://github.com/a10ser/local_manifests.git -b lineage-20.0 .repo/local_manifests || true
+      - name: Initialize LineageOS
+        run: |
+          mkdir -p "$ROM_DIR"
+          cd "$ROM_DIR"
 
-    - name: Sync Sources
-      run: |
-        cd ~/rom
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags
+          repo init \
+            -u https://github.com/LineageOS/android.git \
+            -b lineage-21.0 \
+            --git-lfs
 
-    - name: Build ROM
-      run: |
-        cd ~/rom
-        source build/envsetup.sh
-        lunch lineage_a10-userdebug || lunch lineage_a10-ap1a-userdebug
-        mka bacon -j$(nproc --all)
+      - name: Add Samsung A10 manifest
+        run: |
+          cd "$ROM_DIR"
+          mkdir -p .repo/local_manifests
+
+          cat > .repo/local_manifests/a10.xml <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+
+            <remote
+              name="a10"
+              fetch="https://github.com/"
+              revision="14.0" />
+
+            <project
+              name="crdroidandroid/android_device_samsung_a10"
+              path="device/samsung/a10"
+              remote="a10" />
+
+          </manifest>
+          EOF
+
+          cat .repo/local_manifests/a10.xml
+
+      - name: Sync source
+        run: |
+          cd "$ROM_DIR"
+
+          repo sync \
+            --force-sync \
+            --no-clone-bundle \
+            --no-tags \
+            -c \
+            -j2
+
+      - name: Check device tree
+        run: |
+          cd "$ROM_DIR"
+
+          echo "Checking device tree..."
+          test -f device/samsung/a10/AndroidProducts.mk
+          test -f device/samsung/a10/BoardConfig.mk
+
+          echo "Device tree found:"
+          ls -la device/samsung/a10
+
+      - name: Setup build environment
+        run: |
+          cd "$ROM_DIR"
+
+          source build/envsetup.sh
+
+          echo "Available A10 targets:"
+          lunch --help || true
+
+      - name: Build ROM
+        run: |
+          cd "$ROM_DIR"
+
+          source build/envsetup.sh
+
+          lunch "$BUILD_TARGET"
+
+          mka bacon
+
+      - name: Find ROM files
+        if: success()
+        run: |
+          cd "$ROM_DIR"
+
+          echo "ROM output:"
+          find out/target/product/a10 \
+            -maxdepth 1 \
+            -type f \
+            \( -name "*.zip" -o -name "*.img" \) \
+            -print
+
+      - name: Upload ROM
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Samsung-A10-ROM
+          path: |
+            rom/out/target/product/a10/*.zip
+            rom/out/target/product/a10/*.img
+          if-no-files-found: error
+          retention-days: 7
