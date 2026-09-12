@@ -166,5 +166,4 @@ jobs:
           path: |
             rom/out/target/product/a10/*.zip
             rom/out/target/product/a10/*.img
-          if-no-files-found: error
-          retention-days: 7
+    
