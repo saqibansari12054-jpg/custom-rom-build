@@ -34,12 +34,12 @@ jobs:
       run: |
         cd ~/rom
         mkdir -p .repo/local_manifests
-        git clone https://github.com/a10ser/local_manifests.git -b lineage-20.0 .repo/local_manifests || true
+        git clone https://github.com/eun-01/android_device_samsung_a10.git -b lineage-20.0 .repo/local_manifests || true
 
     - name: Fast Sync Sources (Shallow Clone)
       run: |
         cd ~/rom
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch --depth=1
+        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
 
     - name: Build ROM
       run: |
