@@ -1,38 +1,10 @@
-name: Build Android APK
-
-on:
-  workflow_dispatch:
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Setup Java JDK
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
-
       - name: Install Cordova & Build APK
         run: |
           npm install -g cordova
           cordova create myApp com.saqib.invoicetracker "Invoice Tracker"
           cd myApp
-          cp ../index.html www/index.html
+          if [ -f "../index.html" ]; then
+            cp ../index.html www/index.html
+          fi
           cordova platform add android
           cordova build android --debug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Invoice-Tracker-APK
-          path: myApp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
