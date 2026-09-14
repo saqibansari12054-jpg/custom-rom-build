@@ -1,4 +1,4 @@
-name: Build Native Webview APK
+name: Build APK
 
 on:
   workflow_dispatch:
@@ -7,33 +7,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Java 11
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '11'
+          java-version: '17'
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Build APK without Gradle
+      - name: Build APK Direct
         run: |
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/33.0.2"
-          PLATFORM="$ANDROID_HOME/platforms/android-33/android.jar"
-          
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
+          PLATFORM="$ANDROID_HOME/platforms/android-34/android.jar"
+
           mkdir -p build/gen build/obj build/apk/assets
           
-          # HTML Copy
           if [ -f "index.html" ]; then
             cp index.html build/apk/assets/index.html
           else
             echo "<html><body><h1>Invoice Tracker</h1></body></html>" > build/apk/assets/index.html
           fi
 
-          # Manifest & Java Creation
           cat << 'EOF' > AndroidManifest.xml
           <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.saqib.invoicetracker" android:versionCode="1" android:versionName="1.0">
               <uses-permission android:name="android.permission.INTERNET" />
@@ -70,19 +65,15 @@ jobs:
           }
           EOF
 
-          # Compile Resources & Java
           $BUILD_TOOLS/aapt package -f -m -J build/gen -S res -M AndroidManifest.xml -I $PLATFORM 2>/dev/null || true
           javac -d build/obj -classpath $PLATFORM src/com/saqib/invoicetracker/MainActivity.java
           $BUILD_TOOLS/d8 --output build/apk/ build/obj/com/saqib/invoicetracker/*.class
-          
-          # Package APK
           $BUILD_TOOLS/aapt package -f -M AndroidManifest.xml -A build/apk/assets -I $PLATFORM -F build/unsigned.apk build/apk/
           
-          # Debug Key Generate & Sign
           keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
           $BUILD_TOOLS/apksigner sign --ks debug.keystore --ks-pass pass:android --out Invoice-Tracker.apk build/unsigned.apk
 
-      - name: Upload APK
+      - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Invoice-Tracker-APK
