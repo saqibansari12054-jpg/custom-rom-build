@@ -1,80 +1,112 @@
-name: Build APK
+name: Build Android APK
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
-          java-version: '17'
+          distribution: temurin
+          java-version: "17"
 
-      - name: Build APK Direct
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK packages
         run: |
-          BUILD_TOOLS="$ANDROID_HOME/build-tools/34.0.0"
-          PLATFORM="$ANDROID_HOME/platforms/android-34/android.jar"
+          sdkmanager "platform-tools"
+          sdkmanager "platforms;android-35"
+          sdkmanager "build-tools;35.0.0"
 
-          mkdir -p build/gen build/obj build/apk/assets
-          
-          if [ -f "index.html" ]; then
-            cp index.html build/apk/assets/index.html
-          else
-            echo "<html><body><h1>Invoice Tracker</h1></body></html>" > build/apk/assets/index.html
+      - name: Install Cordova
+        run: |
+          npm install --global cordova@latest
+
+      - name: Install project dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
           fi
 
-          cat << 'EOF' > AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.saqib.invoicetracker" android:versionCode="1" android:versionName="1.0">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="Invoice Tracker">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
+      - name: Check web files
+        run: |
+          echo "Checking web application files..."
 
-          mkdir -p src/com/saqib/invoicetracker
-          cat << 'EOF' > src/com/saqib/invoicetracker/MainActivity.java
-          package com.saqib.invoicetracker;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
+          if [ -f "www/index.html" ]; then
+            echo "Found: www/index.html"
+          elif [ -f "index.html" ]; then
+            echo "Found: index.html"
+          else
+            echo "ERROR: index.html was not found."
+            echo "Put your website files in the www/ folder."
+            exit 1
+          fi
 
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("file:///android_asset/index.html");
-                  setContentView(webView);
-              }
-          }
-          EOF
+      - name: Create clean Cordova project
+        run: |
+          rm -rf build
+          mkdir -p build
 
-          $BUILD_TOOLS/aapt package -f -m -J build/gen -S res -M AndroidManifest.xml -I $PLATFORM 2>/dev/null || true
-          javac -d build/obj -classpath $PLATFORM src/com/saqib/invoicetracker/MainActivity.java
-          $BUILD_TOOLS/d8 --output build/apk/ build/obj/com/saqib/invoicetracker/*.class
-          $BUILD_TOOLS/aapt package -f -M AndroidManifest.xml -A build/apk/assets -I $PLATFORM -F build/unsigned.apk build/apk/
-          
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-          $BUILD_TOOLS/apksigner sign --ks debug.keystore --ks-pass pass:android --out Invoice-Tracker.apk build/unsigned.apk
+          cordova create build \
+            com.saqib.invoicetracker \
+            "Invoice Tracker"
 
-      - name: Upload APK Artifact
+      - name: Copy web application
+        run: |
+          rm -rf build/www/*
+          mkdir -p build/www
+
+          if [ -d "www" ] && [ -f "www/index.html" ]; then
+            echo "Copying www/ into Cordova project..."
+            cp -R www/. build/www/
+          else
+            echo "Copying index.html..."
+            cp index.html build/www/index.html
+          fi
+
+      - name: Add Android platform
+        working-directory: build
+        run: |
+          cordova platform add android@latest
+
+      - name: Build APK
+        working-directory: build
+        run: |
+          cordova requirements
+          cordova build android --debug
+
+      - name: Find APK
+        run: |
+          echo "Searching for APK..."
+
+          find build/platforms/android \
+            -type f \
+            -name "*.apk" \
+            -print
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Invoice-Tracker-APK
-          path: Invoice-Tracker.apk
+          path: |
+            build/platforms/android/app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
