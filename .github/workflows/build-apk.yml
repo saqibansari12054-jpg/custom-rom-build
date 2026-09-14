@@ -22,20 +22,17 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Build Web App into Android APK
+      - name: Install Cordova & Build APK
         run: |
-          npm init -y
-          npm install @capacitor/core @capacitor/cli @capacitor/android
-          npx cap init "Invoice Tracker" "com.saqib.invoicetracker" --web-dir .
-          npx cap add android
-          npx cap sync android
-          cd android
-          chmod +x gradlew
-          ./gradlew assembleDebug
+          npm install -g cordova
+          cordova create myApp com.saqib.invoicetracker "Invoice Tracker"
+          cd myApp
+          cp ../index.html www/index.html
+          cordova platform add android
+          cordova build android --debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Invoice-Tracker-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
-
+          path: myApp/platforms/android/app/build/outputs/apk/debug/app-debug.apk
