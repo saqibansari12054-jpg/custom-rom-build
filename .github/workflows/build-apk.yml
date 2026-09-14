@@ -1,4 +1,4 @@
-name: Build Android APK
+name: Build Native Webview APK
 
 on:
   workflow_dispatch:
@@ -6,40 +6,84 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Java JDK
+      - name: Setup Java 11
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '17'
+          java-version: '11'
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Build Web App to APK
+      - name: Build APK without Gradle
         run: |
-          mkdir -p www
-          if [ -f "index.html" ]; then
-            cp index.html www/index.html
-          else
-            echo "<html><body><h1>Invoice Tracker</h1></body></html>" > www/index.html
-          fi
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/33.0.2"
+          PLATFORM="$ANDROID_HOME/platforms/android-33/android.jar"
           
-          # Install Cordova CLI locally for compatibility
-          npm init -y
-          npm install cordova@latest
-          npx cordova create app com.saqib.invoicetracker "Invoice Tracker"
-          cp www/index.html app/www/index.html
-          cd app
-          npx cordova platform add android@12.0.0
-          npx cordova build android --debug
+          mkdir -p build/gen build/obj build/apk/assets
+          
+          # HTML Copy
+          if [ -f "index.html" ]; then
+            cp index.html build/apk/assets/index.html
+          else
+            echo "<html><body><h1>Invoice Tracker</h1></body></html>" > build/apk/assets/index.html
+          fi
 
-      - name: Upload APK Artifact
+          # Manifest & Java Creation
+          cat << 'EOF' > AndroidManifest.xml
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.saqib.invoicetracker" android:versionCode="1" android:versionName="1.0">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <application android:label="Invoice Tracker">
+                  <activity android:name=".MainActivity" android:exported="true">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          mkdir -p src/com/saqib/invoicetracker
+          cat << 'EOF' > src/com/saqib/invoicetracker/MainActivity.java
+          package com.saqib.invoicetracker;
+          import android.app.Activity;
+          import android.os.Bundle;
+          import android.webkit.WebView;
+          import android.webkit.WebViewClient;
+
+          public class MainActivity extends Activity {
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  WebView webView = new WebView(this);
+                  webView.getSettings().setJavaScriptEnabled(true);
+                  webView.getSettings().setDomStorageEnabled(true);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.loadUrl("file:///android_asset/index.html");
+                  setContentView(webView);
+              }
+          }
+          EOF
+
+          # Compile Resources & Java
+          $BUILD_TOOLS/aapt package -f -m -J build/gen -S res -M AndroidManifest.xml -I $PLATFORM 2>/dev/null || true
+          javac -d build/obj -classpath $PLATFORM src/com/saqib/invoicetracker/MainActivity.java
+          $BUILD_TOOLS/d8 --output build/apk/ build/obj/com/saqib/invoicetracker/*.class
+          
+          # Package APK
+          $BUILD_TOOLS/aapt package -f -M AndroidManifest.xml -A build/apk/assets -I $PLATFORM -F build/unsigned.apk build/apk/
+          
+          # Debug Key Generate & Sign
+          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          $BUILD_TOOLS/apksigner sign --ks debug.keystore --ks-pass pass:android --out Invoice-Tracker.apk build/unsigned.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Invoice-Tracker-APK
-          path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
+          path: Invoice-Tracker.apk
