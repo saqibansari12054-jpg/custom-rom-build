@@ -17,89 +17,29 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Generate Android App & Build APK
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Build Web App to APK
         run: |
-          mkdir -p android/app/src/main/assets
-          
-          # HTML File Check & Move
+          mkdir -p www
           if [ -f "index.html" ]; then
-            cp index.html android/app/src/main/assets/index.html
+            cp index.html www/index.html
           else
-            echo "<html><body><h1>Invoice Tracker</h1><p>App Built Successfully!</p></body></html>" > android/app/src/main/assets/index.html
+            echo "<html><body><h1>Invoice Tracker</h1></body></html>" > www/index.html
           fi
-
-          # Android Manifest
-          cat << 'EOF' > android/app/src/main/AndroidManifest.xml
-          <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.saqib.invoicetracker">
-              <uses-permission android:name="android.permission.INTERNET" />
-              <application android:label="Invoice Tracker" android:usesCleartextTraffic="true">
-                  <activity android:name=".MainActivity" android:exported="true">
-                      <intent-filter>
-                          <action android:name="android.intent.action.MAIN" />
-                          <category android:name="android.intent.category.LAUNCHER" />
-                      </intent-filter>
-                  </activity>
-              </application>
-          </manifest>
-          EOF
-
-          # MainActivity Java File
-          mkdir -p android/app/src/main/java/com/saqib/invoicetracker
-          cat << 'EOF' > android/app/src/main/java/com/saqib/invoicetracker/MainActivity.java
-          package com.saqib.invoicetracker;
-          import android.app.Activity;
-          import android.os.Bundle;
-          import android.webkit.WebView;
-          import android.webkit.WebViewClient;
-
-          public class MainActivity extends Activity {
-              @Override
-              protected void onCreate(Bundle savedInstanceState) {
-                  super.onCreate(savedInstanceState);
-                  WebView webView = new WebView(this);
-                  webView.getSettings().setJavaScriptEnabled(true);
-                  webView.getSettings().setDomStorageEnabled(true);
-                  webView.setWebViewClient(new WebViewClient());
-                  webView.loadUrl("file:///android_asset/index.html");
-                  setContentView(webView);
-              }
-          }
-          EOF
-
-          # Gradle Files Setup
-          cat << 'EOF' > android/build.gradle
-          buildscript {
-              repositories { google(); mavenCentral() }
-              dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
-          }
-          allprojects { repositories { google(); mavenCentral() } }
-          EOF
-
-          cat << 'EOF' > android/app/build.gradle
-          plugins { id 'com.android.application' }
-          android {
-              compileSdk 33
-              namespace 'com.saqib.invoicetracker'
-              defaultConfig {
-                  applicationId "com.saqib.invoicetracker"
-                  minSdk 21
-                  targetSdk 33
-                  versionCode 1
-                  versionName "1.0"
-              }
-          }
-          EOF
-
-          cat << 'EOF' > android/settings.gradle
-          include ':app'
-          EOF
-
-          # Build APK
-          cd android
-          gradle assembleDebug
+          
+          # Install Cordova CLI locally for compatibility
+          npm init -y
+          npm install cordova@latest
+          npx cordova create app com.saqib.invoicetracker "Invoice Tracker"
+          cp www/index.html app/www/index.html
+          cd app
+          npx cordova platform add android@12.0.0
+          npx cordova build android --debug
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: Invoice-Tracker-APK
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: app/platforms/android/app/build/outputs/apk/debug/app-debug.apk
