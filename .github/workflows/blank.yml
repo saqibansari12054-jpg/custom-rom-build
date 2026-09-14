@@ -1,49 +1,126 @@
-name: Build Custom ROM
+name: Build Samsung Galaxy A10 ROM
 
 on:
   workflow_dispatch:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    timeout-minutes: 360
+
+    env:
+      ROM_DIR: ${{ github.workspace }}/rom
+      DEVICE: a10
 
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
 
-    - name: Maximize Disk Space
-      run: |
-        sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /usr/local/share/boost
-        sudo apt-get clean
-        docker image prune -a -f
+      - name: Checkout
+        uses: actions/checkout@v4
 
-    - name: Setup Build Environment
-      run: |
-        sudo apt update
-        sudo apt install -y bc bison build-essential curl flex g++-multilib gcc-multilib git gnupg gperf libxml2-utils lzop pngcrush schedtool squashfs-tools xsltproc zip zlib1g-dev repo
 
-    - name: Initialize LineageOS Source
-      run: |
-        mkdir -p ~/rom
-        cd ~/rom
-        git config --global user.name "saqibansari12054-jpg"
-        git config --global user.email "saqibansari12054@gmail.com"
-        repo init -u https://github.com/LineageOS/android.git -b lineage-20.0 --git-lfs --depth=1
+      # Free as much disk space as possible
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /opt/ghc
+          sudo apt-get clean
+          df -h
 
-    - name: Setup Local Manifest for Samsung A10
-      run: |
-        cd ~/rom
-        mkdir -p .repo/local_manifests
-        git clone https://github.com/eun-01/android_device_samsung_a10.git -b lineage-20.0 .repo/local_manifests || true
 
-    - name: Fast Sync Sources (Shallow Clone)
-      run: |
-        cd ~/rom
-        repo sync -c -j$(nproc --all) --force-sync --no-clone-bundle --no-tags --current-branch
+      # Android build dependencies
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
 
-    - name: Build ROM
-      run: |
-        cd ~/rom
-        source build/envsetup.sh
-        lunch lineage_a10-userdebug || lunch lineage_a10-ap1a-userdebug
-        mka bacon -j$(nproc --all)
+          sudo apt-get install -y \
+            adb \
+            bc \
+            bison \
+            build-essential \
+            ccache \
+            curl \
+            flex \
+            g++-multilib \
+            gcc-multilib \
+            git \
+            gnupg \
+            gperf \
+            imagemagick \
+            lib32ncurses-dev \
+            lib32readline-dev \
+            lib32z1-dev \
+            libelf-dev \
+            liblz4-tool \
+            libncurses-dev \
+            libssl-dev \
+            libxml2-utils \
+            lzop \
+            pngcrush \
+            rsync \
+            schedtool \
+            squashfs-tools \
+            unzip \
+            xsltproc \
+            zip \
+            zlib1g-dev
+
+
+      # Install repo
+      - name: Install repo
+        run: |
+          mkdir -p "$HOME/bin"
+
+          curl -L \
+            https://storage.googleapis.com/git-repo-downloads/repo \
+            -o "$HOME/bin/repo"
+
+          chmod +x "$HOME/bin/repo"
+
+          echo "$HOME/bin" >> "$GITHUB_PATH"
+
+          "$HOME/bin/repo" --version
+
+
+      # LineageOS Android 13 / LineageOS 20
+      - name: Initialize LineageOS
+        run: |
+          mkdir -p "$ROM_DIR"
+          cd "$ROM_DIR"
+
+          repo init \
+            -u https://github.com/LineageOS/android.git \
+            -b lineage-20.0 \
+            --git-lfs
+
+
+      # Samsung A10 device manifest
+      - name: Create A10 manifest
+        run: |
+          cd "$ROM_DIR"
+
+          mkdir -p .repo/local_manifests
+
+          cat > .repo/local_manifests/a10.xml <<'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <manifest>
+
+            <remote
+              name="github"
+              fetch="https://github.com/" />
+
+            <project
+              name="geckyn/android_device_samsung_a10"
+              path="device/samsung/a10"
+              remote="github"
+              revision="rr" />
+
+            <project
+              name="geckyn/proprietary_vendor_samsung_a10"
+              path="vendor/samsung/a10"
+              remote="github"
+              revision="rr" />
+
+            <project
+              name="Chatur27/Eureka-kernel-for-SM-A105-Q"
+             
