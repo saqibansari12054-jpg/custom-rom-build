@@ -6,107 +6,134 @@ on:
     branches:
       - main
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout repository
       - name: Checkout
         uses: actions/checkout@v4
 
+      # 2. Setup Node.js
+      # IMPORTANT: No "cache: npm" because the project has no lock file
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: "22"
 
+      # 3. Setup Java
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "17"
 
+      # 4. Setup Android SDK
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      # 5. Install required Android SDK packages
       - name: Install Android SDK packages
+        shell: bash
         run: |
+          yes | sdkmanager --licenses || true
           sdkmanager "platform-tools"
           sdkmanager "platforms;android-35"
           sdkmanager "build-tools;35.0.0"
 
+      # 6. Install Cordova
       - name: Install Cordova
         run: |
-          npm install --global cordova@latest
+          npm install -g cordova@latest
+          cordova --version
 
-      - name: Install project dependencies
+      # 7. Create a clean Cordova project
+      - name: Create Cordova project
+        shell: bash
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          elif [ -f package.json ]; then
-            npm install
-          fi
+          rm -rf build
+          cordova create build com.saqib.invoicetracker "Invoice Tracker"
 
-      - name: Check web files
+      # 8. Copy website files
+      - name: Copy web application
+        shell: bash
         run: |
-          echo "Checking web application files..."
+          mkdir -p build/www
 
-          if [ -f "www/index.html" ]; then
-            echo "Found: www/index.html"
+          if [ -d "www" ]; then
+            echo "Found www folder"
+            cp -R www/. build/www/
           elif [ -f "index.html" ]; then
-            echo "Found: index.html"
+            echo "Found index.html"
+            cp index.html build/www/
           else
-            echo "ERROR: index.html was not found."
-            echo "Put your website files in the www/ folder."
+            echo "ERROR: No web application found."
+            echo "Expected either:"
+            echo "  www/index.html"
+            echo "or:"
+            echo "  index.html"
             exit 1
           fi
 
-      - name: Create clean Cordova project
+      # 9. Make sure index.html exists
+      - name: Check web files
+        shell: bash
         run: |
-          rm -rf build
-          mkdir -p build
-
-          cordova create build \
-            com.saqib.invoicetracker \
-            "Invoice Tracker"
-
-      - name: Copy web application
-        run: |
-          rm -rf build/www/*
-          mkdir -p build/www
-
-          if [ -d "www" ] && [ -f "www/index.html" ]; then
-            echo "Copying www/ into Cordova project..."
-            cp -R www/. build/www/
-          else
-            echo "Copying index.html..."
-            cp index.html build/www/index.html
+          if [ ! -f "build/www/index.html" ]; then
+            echo "ERROR: build/www/index.html was not found."
+            find build/www -maxdepth 2 -type f -print
+            exit 1
           fi
 
+          echo "Web application found:"
+          ls -la build/www
+
+      # 10. Add Android platform
       - name: Add Android platform
         working-directory: build
         run: |
           cordova platform add android@latest
 
+      # 11. Build debug APK
       - name: Build APK
         working-directory: build
         run: |
           cordova requirements
           cordova build android --debug
 
+      # 12. Find APK
       - name: Find APK
+        shell: bash
         run: |
           echo "Searching for APK..."
+          find build/platforms/android -type f -name "*.apk" -print
 
-          find build/platforms/android \
-            -type f \
-            -name "*.apk" \
-            -print
+      # 13. Copy APK to simple location
+      - name: Prepare APK
+        shell: bash
+        run: |
+          mkdir -p output
 
+          APK=$(find build/platforms/android -type f -name "*.apk" | head -n 1)
+
+          if [ -z "$APK" ]; then
+            echo "ERROR: APK was not created."
+            exit 1
+          fi
+
+          echo "APK found: $APK"
+          cp "$APK" output/Invoice-Tracker-debug.apk
+
+          ls -lh output/Invoice-Tracker-debug.apk
+
+      # 14. Upload APK
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: Invoice-Tracker-APK
-          path: |
-            build/platforms/android/app/build/outputs/apk/**/*.apk
+          path: output/Invoice-Tracker-debug.apk
           if-no-files-found: error
